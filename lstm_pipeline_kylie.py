@@ -55,13 +55,13 @@ MAX_TICKERS = 30          # limit tickers for speed
 WINDOW_SIZE = 20          # how many past periods the LSTM sees
 BATCH_SIZE = 64
 NUM_EPOCHS = 10
-HIDDEN_SIZE = 32
+HIDDEN_SIZE = 64
 NUM_LAYERS = 1
 LEARNING_RATE = 1e-3
 SEED = 42
 
 # "daily" or "weekly"
-FREQUENCY = "weekly"      # <-- change to "daily" if you want daily predictions
+FREQUENCY = "daily"    
 
 
 # -------------------------------------------------------------------
