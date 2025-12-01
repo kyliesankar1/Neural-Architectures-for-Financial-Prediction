@@ -52,10 +52,10 @@ END_DATE = "2020-12-31"
 SPLIT_DATE = "2018-01-01"
 
 MAX_TICKERS = 30        # limit tickers for speed
-WINDOW_SIZE = 10          # how many past periods the LSTM sees
+WINDOW_SIZE = 20          # how many past periods the LSTM sees
 BATCH_SIZE = 64
 NUM_EPOCHS = 20
-HIDDEN_SIZE = 64
+HIDDEN_SIZE = 32
 NUM_LAYERS = 1
 LEARNING_RATE = 1e-3
 SEED = 42
