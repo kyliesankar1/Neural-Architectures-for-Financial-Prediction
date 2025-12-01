@@ -1,5 +1,5 @@
 """
-LSTM pipeline with MACD for stock return direction (daily or weekly).
+LSTM pipeline with for stock return direction (daily or weekly).
 
 Features used per (date, ticker):
 - 1-period return
@@ -8,8 +8,8 @@ Features used per (date, ticker):
 - volatility
 - cross-sectional momentum rank
 - cross-sectional momentum zscore
-- MACD (standard: EMA12 - EMA26)
-- MACD signal (EMA9 of MACD)
+- MACD 
+- MACD signal 
 - MACD histogram (MACD - signal)
 
 Outputs:
@@ -71,8 +71,6 @@ SEED = 42
 FREQUENCY = "weekly"   # "daily" or "weekly"
 
 
-# --------------------------- HELPERS -----------------------------------
-
 def set_seed(seed=42):
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -89,8 +87,6 @@ def compute_macd(price_series: pd.Series) -> pd.DataFrame:
     hist = macd - signal
     return pd.DataFrame({"macd": macd, "macd_signal": signal, "macd_hist": hist})
 
-
-# --------------------------- DATASET BUILDER ---------------------------
 
 def build_lstm_dataset(prices: pd.DataFrame, window_size=20, frequency="daily"):
     """
@@ -178,7 +174,6 @@ def build_lstm_dataset(prices: pd.DataFrame, window_size=20, frequency="daily"):
     return X, y, dates, tickers
 
 
-# --------------------------- MODEL -------------------------------------
 
 class LSTMBinary(nn.Module):
     def __init__(self, input_size, hidden, layers):
@@ -197,7 +192,6 @@ class LSTMBinary(nn.Module):
         return self.fc(last)
 
 
-# --------------------------- MAIN PIPELINE -----------------------------
 
 def main():
     set_seed(SEED)
@@ -229,10 +223,17 @@ def main():
         frequency=FREQUENCY
     )
 
+    # 4. Time-based train/test split by label date
     split_ts = pd.to_datetime(SPLIT_DATE)
 
+    # If the dates coming from the dataset are tz-aware (e.g. UTC),
+    # localize the split timestamp to the same timezone so comparison works.
+    if getattr(dates[0], "tzinfo", None) is not None:
+        split_ts = split_ts.tz_localize(dates[0].tzinfo)
+
     mask_train = dates < split_ts
-    mask_test = dates >= split_ts
+    mask_test = ~mask_train
+
 
     X_train, y_train = X[mask_train], y[mask_train]
     X_test, y_test = X[mask_test], y[mask_test]
