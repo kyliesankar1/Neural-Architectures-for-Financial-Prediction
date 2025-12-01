@@ -59,7 +59,7 @@ LEARNING_RATE = 1e-3
 SEED = 42
 
 # "daily" or "weekly"
-FREQUENCY = "daily"
+FREQUENCY = "weekly"
 
 
 def set_seed(seed: int = 42) -> None:
@@ -103,7 +103,7 @@ def build_lstm_dataset(
         mom_lookback = 26
         vol_window = 10
     else:
-        mom_lookback = 126
+        mom_lookback = 20
         vol_window = 20
 
     mom = compute_momentum(prices, lookback=mom_lookback)
@@ -183,8 +183,6 @@ def build_lstm_dataset(
         np.array(date_list),
         np.array(ticker_list),
     )
-
-
 
 class LSTMBinaryClassifier(nn.Module):
     def __init__(self, input_size: int, hidden_size: int, num_layers: int = 1):
