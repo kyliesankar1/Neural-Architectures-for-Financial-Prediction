@@ -41,7 +41,7 @@ HIDDEN_SIZE = 32
 NUM_LAYERS = 1
 LEARNING_RATE = 1e-3
 SEED = 42
-
+FREQUENCY = "daily"
 def set_seed(seed: int = 42) -> None:
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -112,10 +112,6 @@ def build_lstm_dataset(
 
     return X, y, dates, tickers
 
-
-# -----------------------------
-# PyTorch model
-# -----------------------------
 class LSTMBinaryClassifier(nn.Module):
     def __init__(self, input_size: int, hidden_size: int, num_layers: int = 1):
         super().__init__()
@@ -154,25 +150,39 @@ def main():
     print(f"Total tickers in file: {len(all_tickers)}; using first {len(tickers)}")
     print("Some tickers:", tickers[:10])
 
-    # 2. Load prices via project helper (adjusted close)
     print("\nLoading adjusted close prices via build_adj_close_panel...")
-    prices = build_adj_close_panel(
-        tickers,
-        start=START_DATE,
-        end=END_DATE,
+prices = build_adj_close_panel(
+    tickers,
+    start=START_DATE,
+    end=END_DATE,
+)
+print("Raw daily price panel shape:", prices.shape)
+print("First few rows of prices:\n", prices.head())
+
+if prices.empty:
+    raise SystemExit(
+        "ERROR: prices DataFrame is empty. "
+        "Check your data/universe files or date range."
     )
-    print("Price panel shape:", prices.shape)
-    print("First few rows of prices:\n", prices.head())
 
-    if prices.empty:
-        raise SystemExit(
-            "ERROR: prices DataFrame is empty. "
-            "Check your data/universe files or date range."
-        )
+if FREQUENCY == "weekly":
+    # Use Friday close of each week (or last trading day of each week)
+    prices_used = prices.resample("W-FRI").last()
+    print("\nUsing WEEKLY closes (W-FRI resample).")
+else:
+    prices_used = prices
+    print("\nUsing DAILY closes.")
 
-    # 3. Build LSTM dataset (sliding windows of returns)
-    print("\nBuilding LSTM dataset (sliding windows of returns)...")
-    X, y, dates, ticker_arr = build_lstm_dataset(prices, window_size=WINDOW_SIZE)
+print("Price panel USED shape:", prices_used.shape)
+print("First few rows of prices_used:\n", prices_used.head())
+
+# 3. Build LSTM dataset (sliding windows of returns)
+print("\nBuilding LSTM dataset (sliding windows of returns)...")
+X, y, dates, ticker_arr = build_lstm_dataset(prices_used, window_size=WINDOW_SIZE)
+print(f"Total samples built: {X.shape[0]}")
+print("X shape:", X.shape, "y shape:", y.shape)
+
+
     print(f"Total samples built: {X.shape[0]}")
     print("X shape:", X.shape, "y shape:", y.shape)
 
@@ -203,7 +213,7 @@ def main():
     train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
     test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=False)
 
-    # 6. Build model
+    # Build model
     model = LSTMBinaryClassifier(
         input_size=1,
         hidden_size=HIDDEN_SIZE,
@@ -213,7 +223,7 @@ def main():
     criterion = nn.BCEWithLogitsLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
-    # 7. Training loop
+    # Training loop
     print("\nTraining LSTM...")
     for epoch in range(1, NUM_EPOCHS + 1):
         model.train()
@@ -233,7 +243,7 @@ def main():
         epoch_loss /= len(train_ds)
         print(f"Epoch {epoch:02d}/{NUM_EPOCHS} - train loss: {epoch_loss:.4f}")
 
-    # 8. Evaluation on test set
+    # Evaluation on test set
     print("\nEvaluating on test set...")
     model.eval()
     all_logits = []
@@ -272,7 +282,7 @@ def main():
     out_df.to_csv(out_path, index=False)
     print(f"\nSaved LSTM predictions to {out_path}")
 
-    # 10. Tiny summary file
+    # Tiny summary file
     summary_path = RESULTS_DIR / "lstm_summary.txt"
     with open(summary_path, "w") as f:
         f.write("LSTM binary classifier summary\n")
