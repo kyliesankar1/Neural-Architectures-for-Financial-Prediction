@@ -75,11 +75,20 @@ y_reg = returns_1d.shift(-1).stack()                       # next-day return
 y_reg.name = "future_return"
 
 # join everything together
+
 df = dataset.join([y_class, y_reg]).reset_index()
 df["date"] = pd.to_datetime(df["date"])
 
+# make dates timezone-naive so we can compare to split_date
+df["date"] = df["date"].dt.tz_localize(None)
+
 # these are the features I'm using in the models
 feature_cols = ["ret_1d", "momentum_126d", "vol_20d", "mom_rank"]
+
+# drop any rows where features or targets are NaN
+df = df.dropna(subset=feature_cols + ["target", "future_return"])
+
+print("Final dataset shape after dropping NaNs:", df.shape)
 
 
 # train the classifier (predict up/down movement)
