@@ -60,7 +60,7 @@ SEED = 42
 
 # "daily" or "weekly"
 FREQUENCY = "weekly"
------------------------------------------------------------------------------
+
 
 def set_seed(seed: int = 42) -> None:
     np.random.seed(seed)
@@ -84,7 +84,6 @@ def compute_macd(prices: pd.DataFrame,
     macd_hist = macd_line - signal_line
     return macd_line, signal_line, macd_hist
 
-------------------------------------------------------------------------------
 
 def build_lstm_dataset(
     prices: pd.DataFrame,
