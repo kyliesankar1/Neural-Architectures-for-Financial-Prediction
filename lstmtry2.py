@@ -668,8 +668,10 @@ def analyze_sharpe(pred_csv_path: Path) -> None:
       - Sharpe by ticker
 
     Strategy:
-      position = 1 if y_pred == 1 else 0   (long/flat)
-      strategy_ret = position * next-period return
+      position_t = 1 if y_pred_t == 1 else 0   (long/flat)
+      strategy_ret_t = position_t * future_ret_t
+
+    where future_ret_t is the return from t -> t+1, matching how labels were defined.
     """
 
     print(f"\n[Sharpe] Loading predictions from {pred_csv_path}")
@@ -684,7 +686,7 @@ def analyze_sharpe(pred_csv_path: Path) -> None:
     df_pred["date"] = pd.to_datetime(df_pred["date"])
 
     # ------------------------------------------------------------------
-    # Rebuild the same price panel and 1-period returns used in training
+    # Rebuild the same price panel and FUTURE returns used for labels
     # ------------------------------------------------------------------
     tickers = df_pred["ticker"].dropna().unique().tolist()
 
@@ -702,22 +704,26 @@ def analyze_sharpe(pred_csv_path: Path) -> None:
         prices_used = prices
         annual_factor = 252
 
+    # 1-period returns (t-1 -> t)
     rets_1 = compute_returns(prices_used, periods=1)
 
-    # Melt returns to long form: columns = date, ticker, future_ret
+    # FUTURE returns (t -> t+1), matching how labels were created in build_lstm_dataset
+    future_rets = rets_1.shift(-1)
+
+    # Long form: date, ticker, future_ret
     df_ret = (
-        rets_1
+        future_rets
         .stack()
         .reset_index()
     )
     df_ret.columns = ["date", "ticker", "future_ret"]
 
-    # Merge predictions with realized returns on (date, ticker)
+    # Merge predictions with realized FUTURE returns on (date, ticker)
     df = pd.merge(df_pred, df_ret, on=["date", "ticker"], how="inner")
     df = df.dropna(subset=["future_ret"])
 
     if df.empty:
-        raise SystemExit("ERROR: no overlap between predictions and returns for Sharpe analysis")
+        raise SystemExit("ERROR: no overlap between predictions and future returns for Sharpe analysis")
 
     # ------------------------------------------------------------------
     # Build strategy returns: long when y_pred==1, flat otherwise
