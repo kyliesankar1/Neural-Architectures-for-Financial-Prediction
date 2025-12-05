@@ -141,12 +141,13 @@ print("\nXGBoost Classifier Metrics:")
 for k, v in clf_metrics.items():
     print(f"{k}: {v:.4f}")
 
+
 # ---------------------------------------------------------
 # Confusion Matrix
 # ---------------------------------------------------------
 
-y_true = clf_test["target"]
-y_pred = clf_test["pred_label"]
+y_true = clf_test["y_true"]     # correct column
+y_pred = clf_test["y_pred"]     # correct column
 
 cm = confusion_matrix(y_true, y_pred)
 tn, fp, fn, tp = cm.ravel()
@@ -166,7 +167,6 @@ print(f"Precision = {precision:.4f}")
 print(f"Recall (Up) = {recall_up:.4f}")
 print(f"Recall (Down) = {recall_down:.4f}")
 print(f"F1 Score = {f1:.4f}")
-
 
 # ---------------------------------------------------------
 # Train Ranking Model (XGBRanker)
