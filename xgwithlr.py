@@ -171,9 +171,22 @@ rank_model, rank_test = train_xgb_ranker(
     date_col="date",
     split_date="2018-01-01",
 )
+# --- Ranker Feature Importance (using XGBoost Booster API) ---
+booster = rank_model.get_booster()
+score_dict = booster.get_score(importance_type="gain")
 
-fi_rank = get_feature_importance_gain(rank_model, feature_cols)
-print("\nRanker Feature Importance:\n", fi_rank)
+fi_rank = (
+    pd.DataFrame({
+        "feature": list(score_dict.keys()),
+        "gain": list(score_dict.values())
+    })
+    .sort_values("gain", ascending=False)
+    .reset_index(drop=True)
+)
+
+print("\nRanker Feature Importance:")
+print(fi_rank)
+
 
 
 # ---------------------------------------------------------
