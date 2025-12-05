@@ -146,8 +146,8 @@ for k, v in clf_metrics.items():
 # Confusion Matrix
 # ---------------------------------------------------------
 
-y_true = clf_test["y_true"]     # correct column
-y_pred = clf_test["y_pred"]     # correct column
+y_true = clf_test["target"]       # true labels
+y_pred = clf_test["pred_label"]   # predicted labels
 
 cm = confusion_matrix(y_true, y_pred)
 tn, fp, fn, tp = cm.ravel()
