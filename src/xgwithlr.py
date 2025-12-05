@@ -142,31 +142,7 @@ for k, v in clf_metrics.items():
     print(f"{k}: {v:.4f}")
 
 
-# ---------------------------------------------------------
-# Confusion Matrix
-# ---------------------------------------------------------
 
-y_true = clf_test["target"]       # true labels
-y_pred = clf_test["pred_label"]   # predicted labels
-
-cm = confusion_matrix(y_true, y_pred)
-tn, fp, fn, tp = cm.ravel()
-
-print("\nConfusion Matrix:")
-print(cm)
-
-accuracy = accuracy_score(y_true, y_pred)
-precision = precision_score(y_true, y_pred)
-recall_up = recall_score(y_true, y_pred)
-recall_down = tn / (tn + fp)
-f1 = f1_score(y_true, y_pred)
-
-print("\nStats:")
-print(f"Accuracy = {accuracy:.4f}")
-print(f"Precision = {precision:.4f}")
-print(f"Recall (Up) = {recall_up:.4f}")
-print(f"Recall (Down) = {recall_down:.4f}")
-print(f"F1 Score = {f1:.4f}")
 
 # ---------------------------------------------------------
 # Train Ranking Model (XGBRanker)
