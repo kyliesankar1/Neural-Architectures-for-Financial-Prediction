@@ -90,13 +90,15 @@ df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None)
 feature_cols = ["ret_1d", "momentum_126d", "vol_20d", "mom_rank"]
 
 print("\nTraining Linear Regression on base features...")
+
+# Drop NaN future returns (required for sklearn)
+df_lr = df.dropna(subset=["future_return"])
+
 lr = LinearRegression()
-lr.fit(df[feature_cols], df["future_return"])
+lr.fit(df_lr[feature_cols], df_lr["future_return"])
 
-df["lr_pred"] = lr.predict(df[feature_cols])
-feature_cols.append("lr_pred")
+print("Done training LR.")
 
-print("Added 'lr_pred' to feature set.")
 print("New feature set:", feature_cols)
 
 
