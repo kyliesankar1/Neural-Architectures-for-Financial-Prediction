@@ -84,29 +84,25 @@ df = dataset.join([y_class, y_reg]).reset_index()
 df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None)
 
 # ---------------------------------------------------------
+# Drop NaNs BEFORE training LR
+# ---------------------------------------------------------
+
+df = df.dropna(subset=feature_cols + ["target", "future_return"]).copy()
+print("Dataset shape after dropping NaNs:", df.shape)
+
+# ---------------------------------------------------------
 # Add Linear Regression Prediction (Stacking Feature)
 # ---------------------------------------------------------
 
-feature_cols = ["ret_1d", "momentum_126d", "vol_20d", "mom_rank"]
-
 print("\nTraining Linear Regression on base features...")
+
 lr = LinearRegression()
-lr.fit(df[feature_cols], df["future_return"])
+lr.fit(df[feature_cols], df["future_return"])   # USE CLEANED DF
 
 df["lr_pred"] = lr.predict(df[feature_cols])
 feature_cols.append("lr_pred")
 
-print("Added 'lr_pred' to feature set.")
 print("New feature set:", feature_cols)
-
-
-# ---------------------------------------------------------
-# Drop NaNs
-# ---------------------------------------------------------
-
-df = df.dropna(subset=feature_cols + ["target", "future_return"])
-print("Final dataset shape:", df.shape)
-
 
 # ---------------------------------------------------------
 # Train XGBoost Classifier
