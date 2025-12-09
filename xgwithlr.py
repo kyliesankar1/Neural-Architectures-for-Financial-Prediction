@@ -1,16 +1,9 @@
-
 import pandas as pd
 import numpy as np
 from pathlib import Path
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import (
-    confusion_matrix,
-    accuracy_score,
-    precision_score,
-    recall_score,
-    f1_score
-)
+from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
 
 # Project helpers
 from src.data.panel import (
@@ -73,7 +66,11 @@ dataset = pd.DataFrame({
 dataset.index.names = ["date", "ticker"]
 dataset = dataset.dropna()
 
+
+# ---------------------------------------------------------
 # Targets
+# ---------------------------------------------------------
+
 y_class = (returns_1d.shift(-1).stack() > 0).astype(int)
 y_class.name = "target"
 
@@ -82,36 +79,44 @@ y_reg.name = "future_return"
 
 df = dataset.join([y_class, y_reg]).reset_index()
 df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None)
-feature_cols = ["ret_1d", "momentum_126d", "vol_20d", "mom_rank"]
+
+
 # ---------------------------------------------------------
-# Drop NaNs BEFORE training LR
+# Feature columns (defined BEFORE NaN dropping)
+# ---------------------------------------------------------
+
+feature_cols = ["ret_1d", "momentum_126d", "vol_20d", "mom_rank"]
+
+
+# ---------------------------------------------------------
+# Drop NaNs BEFORE training LR or XGBoost
 # ---------------------------------------------------------
 
 df = df.dropna(subset=feature_cols + ["target", "future_return"]).copy()
 print("Dataset shape after dropping NaNs:", df.shape)
 
+
 # ---------------------------------------------------------
-# Add Linear Regression Prediction (Stacking Feature)
+# Linear Regression Stacking Feature
 # ---------------------------------------------------------
 
-print("\nTraining Linear Regression on base features...")
+print("\nTraining Linear Regression...")
 
 lr = LinearRegression()
-lr.fit(df[feature_cols], df["future_return"])   # USE CLEANED DF
+lr.fit(df[feature_cols], df["future_return"])
 
 df["lr_pred"] = lr.predict(df[feature_cols])
 feature_cols.append("lr_pred")
 
 print("New feature set:", feature_cols)
 
+
 # ---------------------------------------------------------
 # Train XGBoost Classifier
 # ---------------------------------------------------------
 
-importance = clf_model.get_booster().get_score(importance_type="gain")
-
 clf_model, clf_metrics, clf_test = train_xgb_classifier(
-    df,
+    df=df,
     feature_cols=feature_cols,
     target_col="target",
     date_col="date",
@@ -121,15 +126,17 @@ clf_model, clf_metrics, clf_test = train_xgb_classifier(
 print("\nXGBoost Classifier Metrics:")
 for k, v in clf_metrics.items():
     print(f"{k}: {v:.4f}")
-importance_df = (
-    pd.DataFrame.from_dict(importance_dict, orient="index", columns=["gain"])
-    .rename_axis("feature")
+
+importance_dict = clf_model.get_booster().get_score(importance_type="gain")
+
+fi_clf = (
+    pd.DataFrame(list(importance_dict.items()), columns=["feature", "gain"])
     .sort_values("gain", ascending=False)
+    .reset_index(drop=True)
 )
 
-print("\nFeature Importance (Gain):")
-print(importance_df)
-
+print("\nClassifier Feature Importance:")
+print(fi_clf)
 
 
 # ---------------------------------------------------------
@@ -157,32 +164,28 @@ print(f"F1 Score = {f1:.4f}")
 
 
 # ---------------------------------------------------------
-# Train Ranking Model (XGBRanker)
+# Train Ranking Model
 # ---------------------------------------------------------
 
 rank_model, rank_test = train_xgb_ranker(
-    df,
+    df=df,
     feature_cols=feature_cols,
     target_col="future_return",
     date_col="date",
     split_date="2018-01-01",
 )
-# --- Ranker Feature Importance (using XGBoost Booster API) ---
-booster = rank_model.get_booster()
-score_dict = booster.get_score(importance_type="gain")
+
+# Feature importance for Ranker
+score_dict = rank_model.get_booster().get_score(importance_type="gain")
 
 fi_rank = (
-    pd.DataFrame({
-        "feature": list(score_dict.keys()),
-        "gain": list(score_dict.values())
-    })
+    pd.DataFrame(list(score_dict.items()), columns=["feature", "gain"])
     .sort_values("gain", ascending=False)
     .reset_index(drop=True)
 )
 
 print("\nRanker Feature Importance:")
 print(fi_rank)
-
 
 
 # ---------------------------------------------------------
@@ -211,7 +214,51 @@ out.mkdir(exist_ok=True)
 clf_test.to_csv(out / "clf_predictions_xg_lr.csv", index=False)
 rank_test.to_csv(out / "rank_predictions_xg_lr.csv", index=False)
 bt.to_csv(out / "backtest_xg_lr.csv", index=False)
-fi_clf.to_csv(out / "fi_classifier_xg_lr.csv")
-fi_rank.to_csv(out / "fi_ranker_xg_lr.csv")
+fi_clf.to_csv(out / "fi_classifier_xg_lr.csv", index=False)
+fi_rank.to_csv(out / "fi_ranker_xg_lr.csv", index=False)
 
 print("\nAll results saved to /results/")
+
+
+# ---------------------------------------------------------
+# Plot Confusion Matrix
+# ---------------------------------------------------------
+
+plt.figure(figsize=(6, 5))
+plt.imshow(cm, cmap="viridis")
+plt.title("Confusion Matrix (Classifier)")
+plt.colorbar()
+
+plt.xticks([0, 1], ["Down (0)", "Up (1)"])
+plt.yticks([0, 1], ["Down (0)", "Up (1)"])
+
+for i in range(2):
+    for j in range(2):
+        plt.text(j, i, cm[i, j], ha="center", va="center", color="white", fontsize=12)
+
+plt.xlabel("Predicted Label")
+plt.ylabel("True Label")
+plt.tight_layout()
+plt.savefig(out / "confusion_matrix_classifier.png", dpi=300)
+plt.close()
+
+print("Saved confusion matrix.")
+
+
+# ---------------------------------------------------------
+# Plot Equity Curve
+# ---------------------------------------------------------
+
+plt.figure(figsize=(10, 5))
+plt.plot(bt["date"], bt["cum_return"])
+plt.title("Equity Curve – XGBoost + Linear Regression Feature")
+plt.xlabel("Date")
+plt.ylabel("Cumulative Growth (Starting at 1.0)")
+plt.grid(True)
+
+plt.tight_layout()
+plt.savefig(out / "equity_curve_xg_lr.png", dpi=300)
+plt.close()
+
+print("Saved equity curve plot.")
+
