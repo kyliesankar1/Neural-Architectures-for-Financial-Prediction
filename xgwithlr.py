@@ -223,6 +223,7 @@ print("\nAll results saved to /results/")
 # ---------------------------------------------------------
 # Plot Confusion Matrix
 # ---------------------------------------------------------
+print("Columns in clf_test:", clf_test.columns.tolist())
 
 plt.figure(figsize=(6, 5))
 plt.imshow(cm, cmap="viridis")
