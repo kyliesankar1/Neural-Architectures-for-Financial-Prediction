@@ -3,7 +3,6 @@ import numpy as np
 from pathlib import Path
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
 
 # Project helpers
 from src.data.panel import (
@@ -17,6 +16,18 @@ from src.data.panel import (
 from src.models.xgb_classifier import train_xgb_classifier
 from src.models.xgb_ranker import train_xgb_ranker
 from src.evaluation.analysis import backtest_long_short
+
+
+# =========================================================
+# CONFIG
+# =========================================================
+
+START = "2014-01-01"
+END = "2020-12-31"
+SPLIT = "2018-01-01"        # train < SPLIT, test >= SPLIT
+
+result_dir = Path("results")
+result_dir.mkdir(exist_ok=True)
 
 
 # =========================================================
@@ -34,17 +45,11 @@ print(f"Loaded {len(tickers)} tickers.")
 # 2. LOAD PRICE PANEL
 # =========================================================
 
-prices = build_adj_close_panel(
-    tickers,
-    start="2014-01-01",
-    end="2020-12-31",
-)
-
+prices = build_adj_close_panel(tickers, start=START, end=END)
 if prices.empty:
     raise ValueError("ERROR: Could not load price panel.")
 
 print("Price panel shape:", prices.shape)
-print(prices.head())
 
 
 # =========================================================
@@ -80,34 +85,44 @@ y_reg.name = "future_return"
 df = dataset.join([y_class, y_reg]).reset_index()
 df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None)
 
-
-# =========================================================
-# 5. CLEAN DATA
-# =========================================================
-
+# Base features
 feature_cols = ["ret_1d", "momentum_126d", "vol_20d", "mom_rank"]
 
+# Clean data
 df = df.dropna(subset=feature_cols + ["target", "future_return"]).copy()
-print("Dataset shape after dropping NaNs:", df.shape)
+print("Final dataset shape:", df.shape)
 
 
 # =========================================================
-# 6. LINEAR REGRESSION STACKING FEATURE
+# 5. TRAIN/TEST SPLIT
 # =========================================================
 
-print("\nTraining Linear Regression...")
+train_df = df[df["date"] < SPLIT].copy()
+test_df  = df[df["date"] >= SPLIT].copy()
+
+print(f"Train size: {len(train_df)}, Test size: {len(test_df)}")
+
+
+# =========================================================
+# 6. TRAIN LINEAR REGRESSION ON TRAIN ONLY (NO LEAKAGE)
+# =========================================================
+
+print("\nTraining Linear Regression (NO LEAK)...")
 
 lr = LinearRegression()
-lr.fit(df[feature_cols], df["future_return"])
+lr.fit(train_df[feature_cols], train_df["future_return"])
 
+# Predict on ENTIRE dataset
 df["lr_pred"] = lr.predict(df[feature_cols])
-feature_cols.append("lr_pred")
 
-print("New feature set:", feature_cols)
+# Add to features
+feature_cols = feature_cols + ["lr_pred"]
+
+print("Updated feature set:", feature_cols)
 
 
 # =========================================================
-# 7. TRAIN XGBOOST CLASSIFIER
+# 7. Train XGBOOST CLASSIFIER
 # =========================================================
 
 clf_model, clf_metrics, clf_test = train_xgb_classifier(
@@ -115,22 +130,20 @@ clf_model, clf_metrics, clf_test = train_xgb_classifier(
     feature_cols=feature_cols,
     target_col="target",
     date_col="date",
-    split_date="2018-01-01",
+    split_date=SPLIT,
 )
 
-print("\n=== XGBOOST CLASSIFIER METRICS ===")
+print("\n=== CLASSIFIER METRICS ===")
 for k, v in clf_metrics.items():
     print(f"{k}: {v:.4f}")
 
-importance_dict = clf_model.get_booster().get_score(importance_type="gain")
+# Feature importance
+clf_importance = clf_model.get_booster().get_score(importance_type="gain")
+fi_clf = pd.DataFrame(
+    clf_importance.items(), columns=["feature", "gain"]
+).sort_values("gain", ascending=False)
 
-fi_clf = (
-    pd.DataFrame(list(importance_dict.items()), columns=["feature", "gain"])
-    .sort_values("gain", ascending=False)
-    .reset_index(drop=True)
-)
-
-print("\n=== CLASSIFIER FEATURE IMPORTANCE ===")
+print("\nClassifier Feature Importance:")
 print(fi_clf)
 
 
@@ -143,18 +156,15 @@ rank_model, rank_test = train_xgb_ranker(
     feature_cols=feature_cols,
     target_col="future_return",
     date_col="date",
-    split_date="2018-01-01",
+    split_date=SPLIT,
 )
 
 rank_importance = rank_model.get_booster().get_score(importance_type="gain")
+fi_rank = pd.DataFrame(
+    rank_importance.items(), columns=["feature", "gain"]
+).sort_values("gain", ascending=False)
 
-fi_rank = (
-    pd.DataFrame(list(rank_importance.items()), columns=["feature", "gain"])
-    .sort_values("gain", ascending=False)
-    .reset_index(drop=True)
-)
-
-print("\n=== RANKER FEATURE IMPORTANCE ===")
+print("\nRanker Feature Importance:")
 print(fi_rank)
 
 
@@ -171,18 +181,15 @@ bt = backtest_long_short(
 )
 
 sharpe = bt.attrs["sharpe_estimate"]
-print(f"\n=== BACKTEST SHARPE ===\n{sharpe}")
+print(f"\n=== BACKTEST SHARPE === {sharpe:.4f}")
 print(bt.tail())
 
 
 # =========================================================
-# 10. SAVE ALL RESULTS (fully guaranteed)
+# 10. SAVE EVERYTHING
 # =========================================================
 
-results_dir = Path("results")
-results_dir.mkdir(exist_ok=True)
-
-save_dict = {
+save_map = {
     "clf_predictions_xg_lr.csv": clf_test,
     "rank_predictions_xg_lr.csv": rank_test,
     "backtest_xg_lr.csv": bt,
@@ -190,9 +197,8 @@ save_dict = {
     "fi_ranker_xg_lr.csv": fi_rank,
 }
 
-for filename, data in save_dict.items():
-    path = results_dir / filename
-    data.to_csv(path, index=False)
-    print(f"Saved {filename} → {path}")
+for fname, data in save_map.items():
+    data.to_csv(result_dir / fname, index=False)
+    print(f"Saved {fname}")
 
 print("\nAll results saved successfully! 🎉")
