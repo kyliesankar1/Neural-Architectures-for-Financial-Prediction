@@ -82,7 +82,7 @@ y_reg.name = "future_return"
 
 df = dataset.join([y_class, y_reg]).reset_index()
 df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None)
-
+feature_cols = ["ret_1d", "momentum_126d", "vol_20d", "mom_rank"]
 # ---------------------------------------------------------
 # Drop NaNs BEFORE training LR
 # ---------------------------------------------------------
